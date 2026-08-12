@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        spoofed: [ false, true ]
+        spoofed: [ true ]
 
     defaults:
       run:
@@ -100,14 +100,14 @@ jobs:
 
       - name: Write key
         run: |
-          if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
+          if [ ! -z "${{ secrets.SIGNING_KEY_BASE64 }}" ]; then
             {
-              echo KEYSTORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}'
+              echo KEYSTORE_PASSWORD='${{ secrets.KEY_STORE_PASSWORD }}'
               echo KEY_ALIAS='${{ secrets.KEY_ALIAS }}'
-              echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}'
+              echo KEY_PASSWORD='${{ secrets.KEY_STORE_PASSWORD }}'
               echo KEYSTORE_FILE='key.jks'
             } >> gradle.properties
-            echo ${{ secrets.KEYSTORE }} | base64 -d > key.jks
+            echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 -d > key.jks
           fi
 
       - name: Setup Java
@@ -145,8 +145,8 @@ jobs:
         run: ./gradlew clean assembleRelease
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v5
-        if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/stable' )) || github.ref_type == 'tag' }}
+        uses: actions/upload-artifact@v7
+        if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/stable' )) || github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
         with:
           name: ${{ matrix.spoofed && 'manager-spoofed' || 'manager' }}
           path: manager/app/build/outputs/apk/release/*.apk

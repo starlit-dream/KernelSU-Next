@@ -1,5 +1,8 @@
 name: Build Manager
 
+permissions:
+  contents: write
+
 on:
   workflow_call:
   workflow_dispatch:
@@ -53,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        spoofed: [ false, true ]
+        spoofed: [ true ]
 
     defaults:
       run:
@@ -67,6 +70,11 @@ jobs:
 
       - name: Spoof Package ID
         if: matrix.spoofed == true
+        env:
+          # 固定包名: 内核把 KSU_MANAGER_PACKAGE 编译成常量, 两边必须一致
+          SPOOF_WORD1: uivsqf
+          SPOOF_WORD2: paoxqw
+          SPOOF_WORD3: swbred
         run: |
           chmod +x spoof
           ./spoof
@@ -82,14 +90,14 @@ jobs:
 
       - name: Write key
         run: |
-          if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
+          if [ ! -z "${{ secrets.SIGNING_KEY_BASE64 }}" ]; then
             {
-              echo KEYSTORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}'
+              echo KEYSTORE_PASSWORD='${{ secrets.KEY_STORE_PASSWORD }}'
               echo KEY_ALIAS='${{ secrets.KEY_ALIAS }}'
-              echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}'
+              echo KEY_PASSWORD='${{ secrets.KEY_STORE_PASSWORD }}'
               echo KEYSTORE_FILE='key.jks'
             } >> gradle.properties
-            echo "${{ secrets.KEYSTORE }}" | base64 -d > key.jks
+            echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 -d > key.jks
           fi
 
       - name: Setup Java
@@ -136,6 +144,25 @@ jobs:
         with:
           name: ${{ matrix.spoofed && 'manager-spoofed' || 'manager' }}
           path: manager/app/build/outputs/apk/release/*.apk
+
+      - name: Publish manager APK release
+        if: ${{ matrix.spoofed == true && github.event_name != 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION_CODE=$((30000 + $(git rev-list --count HEAD)))
+          TAG="manager-${VERSION_CODE}"
+          APK="$(find ./app/build/outputs/apk/release -name '*.apk' | head -n1)"
+          [ -n "$APK" ] || { echo "::error::APK not found"; exit 1; }
+          echo "Publishing $APK as $TAG (versionCode=$VERSION_CODE)"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+                 --title "Manager ${VERSION_CODE}" \
+                 --notes "KernelSU-Next manager, versionCode ${VERSION_CODE} (spoofed, package uivsqf.paoxqw.swbred)" \
+                 --latest=false
+          gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "::notice::manager APK published as ${TAG}"
 
       - name: Upload mappings
         uses: actions/upload-artifact@v7

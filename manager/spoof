@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# Generate 3 random lowercase words (6 letters each)
-word1=$(tr -dc 'a-z' </dev/urandom | head -c6)
-word2=$(tr -dc 'a-z' </dev/urandom | head -c6)
-word3=$(tr -dc 'a-z' </dev/urandom | head -c6)
+# Generate 3 lowercase words (6 letters each).
+# SPOOF_WORD1/2/3 override the random draw so the package name stays stable
+# across builds (the kernel compiles KSU_MANAGER_PACKAGE in as a constant).
+word1=${SPOOF_WORD1:-$(tr -dc 'a-z' </dev/urandom | head -c6)}
+word2=${SPOOF_WORD2:-$(tr -dc 'a-z' </dev/urandom | head -c6)}
+word3=${SPOOF_WORD3:-$(tr -dc 'a-z' </dev/urandom | head -c6)}
 
 echo "Generated words:"
 echo "com     -> $word1"
